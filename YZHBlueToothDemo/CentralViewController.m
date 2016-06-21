@@ -74,7 +74,7 @@
 //蓝牙网关初始化和委托方法设置
 -(void)babyDelegate{
     
-    __weak typeof(self) weakSelf = self;
+//    __weak typeof(self) weakSelf = self;
     [baby setBlockOnCentralManagerDidUpdateState:^(CBCentralManager *central) {
 //        if (central.state == CBCentralManagerStatePoweredOn) {
 //            [SVProgressHUD showInfoWithStatus:@"设备打开成功，开始扫描设备"];
@@ -258,6 +258,12 @@
     [peripheral setDelegate:self];
     //扫描外设Services，成功后会进入方法：-(void)peripheral:(CBPeripheral *)peripheral didDiscoverServices:(NSError *)error{
     [peripheral discoverServices:nil];
+    
+    //停止扫描
+    [manager stopScan];
+    
+    [baby cancelScan];
+
 }
 
 //连接到Peripherals-失败
@@ -474,10 +480,6 @@
 }
 
 -(void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath{
-    //停止扫描
-    [manager stopScan];
-    
-    [baby cancelScan];
     
     //连接设备
     [manager connectPeripheral:peripherals[indexPath.row] options:nil];

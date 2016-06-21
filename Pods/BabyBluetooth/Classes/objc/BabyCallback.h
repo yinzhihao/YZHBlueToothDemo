@@ -63,7 +63,6 @@ typedef void (^BBPeripheralModelDidAddService)(CBPeripheralManager *peripheral,C
 typedef void (^BBPeripheralModelDidStartAdvertising)(CBPeripheralManager *peripheral,NSError *error);
 typedef void (^BBPeripheralModelDidReceiveReadRequest)(CBPeripheralManager *peripheral,CBATTRequest *request);
 typedef void (^BBPeripheralModelDidReceiveWriteRequests)(CBPeripheralManager *peripheral,NSArray *requests);
-typedef void (^BBPeripheralModelIsReadyToUpdateSubscribers)(CBPeripheralManager *peripheral);
 typedef void (^BBPeripheralModelDidSubscribeToCharacteristic)(CBPeripheralManager *peripheral,CBCentral *central,CBCharacteristic *characteristic);
 typedef void (^BBPeripheralModelDidUnSubscribeToCharacteristic)(CBPeripheralManager *peripheral,CBCentral *central,CBCharacteristic *characteristic);
 
@@ -132,7 +131,6 @@ typedef void (^BBPeripheralModelDidUnSubscribeToCharacteristic)(CBPeripheralMana
 @property (nonatomic, copy) BBPeripheralModelDidStartAdvertising blockOnPeripheralModelDidStartAdvertising;
 @property (nonatomic, copy) BBPeripheralModelDidReceiveReadRequest blockOnPeripheralModelDidReceiveReadRequest;
 @property (nonatomic, copy) BBPeripheralModelDidReceiveWriteRequests blockOnPeripheralModelDidReceiveWriteRequests;
-@property (nonatomic, copy) BBPeripheralModelIsReadyToUpdateSubscribers blockOnPeripheralModelIsReadyToUpdateSubscribers;
 @property (nonatomic, copy) BBPeripheralModelDidSubscribeToCharacteristic blockOnPeripheralModelDidSubscribeToCharacteristic;
 @property (nonatomic, copy) BBPeripheralModelDidUnSubscribeToCharacteristic blockOnPeripheralModelDidUnSubscribeToCharacteristic;
 

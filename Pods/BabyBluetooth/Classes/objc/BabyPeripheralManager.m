@@ -37,21 +37,11 @@
                 [UUIDS addObject:s.UUID];
             }
             //启动广播
-            if (_manufacturerData) {
-                [_peripheralManager startAdvertising:
-                 @{
-                   CBAdvertisementDataServiceUUIDsKey :  UUIDS
-                   ,CBAdvertisementDataLocalNameKey : _localName,
-                   CBAdvertisementDataManufacturerDataKey:_manufacturerData
-                }];
-            } else {
-                [_peripheralManager startAdvertising:
-                 @{
-                   CBAdvertisementDataServiceUUIDsKey :  UUIDS
-                   ,CBAdvertisementDataLocalNameKey : _localName
-                   }];
-            }
-          
+            [_peripheralManager startAdvertising:
+             @{
+               CBAdvertisementDataServiceUUIDsKey :  UUIDS
+               ,CBAdvertisementDataLocalNameKey : _localName
+             }];
         }
         else {
             PERIPHERAL_MANAGER_INIT_WAIT_TIMES++;
@@ -65,13 +55,6 @@
             BabyLog(@">>> 第%d次等待peripheralManager打开",PERIPHERAL_MANAGER_INIT_WAIT_TIMES);
         }
         
-        return self;
-    };
-}
-
-- (BabyPeripheralManager *(^)())stopAdvertising {
-    return ^BabyPeripheralManager*() {
-        [_peripheralManager stopAdvertising];
         return self;
     };
 }
@@ -97,22 +80,7 @@
     return ^BabyPeripheralManager*(NSArray *array) {
         _services = [NSMutableArray arrayWithArray:array];
         [self addServicesToPeripheral];
-        return self;
-    };
-}
-
-- (BabyPeripheralManager *(^)())removeAllServices {
-    return ^BabyPeripheralManager*() {
-        didAddServices = 0;
-        [_peripheralManager removeAllServices];
-        return self;
-    };
-}
-
-- (BabyPeripheralManager *(^)(NSData *data))addManufacturerData {
-    return ^BabyPeripheralManager*(NSData *data) {
-        _manufacturerData = data;
-        return self;
+        return  self;
     };
 }
 
@@ -178,10 +146,6 @@
 
 - (void)peripheralManager:(CBPeripheralManager *)peripheral didReceiveWriteRequests:(NSArray *)requests {
     callbackBlock(blockOnPeripheralModelDidReceiveWriteRequests)(peripheral,requests);
-}
-
-- (void)peripheralManagerIsReadyToUpdateSubscribers:(CBPeripheralManager *)peripheral {
-    callbackBlock(blockOnPeripheralModelIsReadyToUpdateSubscribers)(peripheral);
 }
 
 - (void)peripheralManager:(CBPeripheralManager *)peripheral central:(CBCentral *)central didSubscribeToCharacteristic:(CBCharacteristic *)characteristic {
