@@ -12,16 +12,27 @@
 
 #define SCREEN_WIDTH [UIScreen mainScreen].bounds.size.width
 #define SCREEN_HEIGHT [UIScreen mainScreen].bounds.size.height
+#define MAX_CHARACTERISTIC_VALUE_SIZE 20
+#define WriteCharacteristicUUID @"BEF8D6C9-9C21-4C9E-B632-BD58C1009F9F"
+
 @interface CentralViewController ()
 {
     //系统蓝牙设备管理对象，可以把他理解为主设备，通过他，可以去扫描和链接外设
     CBCentralManager *manager;
+    
+    //保存连接的设备和特征
+    CBPeripheral *_connectedPeripheral;
+    CBCharacteristic *_characteristic;
+    
     //用于保存被发现设备
     NSMutableArray *peripherals;
     NSMutableArray *peripheralsAD;
     
     BabyBluetooth *baby;
+    
+    NSMutableArray *_sendDataArray;
 }
+@property (weak, nonatomic) IBOutlet UITextView *textView;
 @end
 
 @implementation CentralViewController
@@ -36,7 +47,7 @@
     
     [SVProgressHUD showInfoWithStatus:@"准备打开设备"];
     
-    _tableView = [[UITableView alloc] initWithFrame:CGRectMake(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT) style:UITableViewStylePlain];
+    _tableView = [[UITableView alloc] initWithFrame:CGRectMake(0, 64, SCREEN_WIDTH, 120) style:UITableViewStylePlain];
     _tableView.delegate = self;
     _tableView.dataSource = self;
     _tableView.backgroundColor = [UIColor groupTableViewBackgroundColor];
@@ -44,6 +55,7 @@
     
     peripherals = [NSMutableArray array];
     peripheralsAD = [NSMutableArray array];
+    _sendDataArray = [NSMutableArray array];
     
     [_tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:@"cell"];
     /*
@@ -67,6 +79,97 @@
     //设置委托后直接可以使用，无需等待CBCentralManagerStatePoweredOn状态。
     baby.scanForPeripherals().begin();
     //baby.scanForPeripherals().begin().stop(10);
+}
+
+#pragma mark - 发送
+- (IBAction)sendMessage:(id)sender {
+    NSLog(@"SEND Message:%@",self.textView.text);
+    
+    NSString *curPrintContent;
+    curPrintContent = self.textView.text;
+    
+    if ([curPrintContent length]) {
+        NSString *printed = [curPrintContent stringByAppendingFormat:@"%c%c%c%c",'\n','\n','\n','\n'];
+        [self printerWithFormat:Align_Right CharZoom:Char_Zoom_3 content:printed];
+        [self.textView resignFirstResponder];
+    }
+}
+
+- (void)printerWithFormat:(Align_Type_e)eAlignType CharZoom:(Char_Zoom_Num_e)eCharZoomNum content:(NSString *)printContent
+{
+    NSData *data = nil;
+    NSUInteger strLength;
+    
+    NSStringEncoding enc = CFStringConvertEncodingToNSStringEncoding(kCFStringEncodingGB_18030_2000);
+    
+    Byte caPrintFmt[500];
+    /*初始化命令：ESC @ 即0x1b,0x40*/
+    //caPrintFmt[0] = 0x1b;
+    //caPrintFmt[1] = 0x40;
+    
+    /*字符设置命令：ESC ! n即0x1b,0x21,n*/
+    caPrintFmt[0] = 0x1d;
+    caPrintFmt[1] = 0x21;
+    
+    caPrintFmt[2] = (eCharZoomNum<<4) | eCharZoomNum;
+    
+    caPrintFmt[3] = 0x1b;
+    caPrintFmt[4] = 0x61;
+    caPrintFmt[5] = eAlignType;
+    
+    
+    NSData *printData = [printContent dataUsingEncoding:enc];
+    Byte *printByte = (Byte *)[printData bytes];
+    
+    strLength = [printData length];
+    if (strLength < 1) {
+        return;
+    }
+    
+    for (int i = 0; i<strLength; i++) {
+        caPrintFmt[6+i] = *(printByte+i);
+    }
+    
+    data = [NSData dataWithBytes:caPrintFmt length:6+strLength];
+    
+    [self printLongData:data];
+}
+
+- (void)printLongData:(NSData *)printContent
+{
+    NSUInteger i;
+    NSUInteger strLength;
+    NSUInteger cellCount;
+    NSUInteger cellMin;
+    NSUInteger cellLen;
+    
+    strLength = [printContent length];
+    if (strLength<1) {
+        return;
+    }
+    
+    cellCount = (strLength%MAX_CHARACTERISTIC_VALUE_SIZE)?(strLength/MAX_CHARACTERISTIC_VALUE_SIZE +1):(strLength/MAX_CHARACTERISTIC_VALUE_SIZE);
+    
+    for (i=0; i<cellCount; i++) {
+        cellMin = i*MAX_CHARACTERISTIC_VALUE_SIZE;
+        if (cellMin + MAX_CHARACTERISTIC_VALUE_SIZE > strLength) {
+            cellLen = strLength - cellMin;
+        }
+        else {
+            cellLen = MAX_CHARACTERISTIC_VALUE_SIZE;
+        }
+        
+        NSLog(@"print:总长-%lu,行数-%lu,前面的长度-%lu,当前行的长度-%lu",(unsigned long)strLength,(unsigned long)cellCount,(unsigned long)cellMin,(unsigned long)cellLen);
+        
+        // 截取当前行的打印内容
+        NSRange range = NSMakeRange(cellMin, cellLen);
+        NSData *subData = [printContent subdataWithRange:range];
+        
+        NSLog(@"当前打印内容:%@",subData);
+        [_sendDataArray addObject:subData];
+        
+        [self writeCharacteristic:_connectedPeripheral characteristic:_characteristic value:subData];
+    }
 }
 
 #pragma mark -蓝牙配置和操作
@@ -232,25 +335,16 @@
 //    }
 }
 
-#pragma mark -UIViewController 方法
-//插入table数据
--(void)insertTableView:(CBPeripheral *)peripheral advertisementData:(NSDictionary *)advertisementData{
-    if(![peripherals containsObject:peripheral]) {
-        NSMutableArray *indexPaths = [[NSMutableArray alloc] init];
-        NSIndexPath *indexPath = [NSIndexPath indexPathForRow:peripherals.count inSection:0];
-        [indexPaths addObject:indexPath];
-        [peripherals addObject:peripheral];
-        [peripheralsAD addObject:advertisementData];
-        [self.tableView insertRowsAtIndexPaths:indexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
-    }
-}
-
 
 //连接到Peripherals-成功
 - (void)centralManager:(CBCentralManager *)central didConnectPeripheral:(CBPeripheral *)peripheral
 {
     NSLog(@">>>连接到名称为（%@）的设备-成功",peripheral.name);
     NSLog(@"连接到 %@ ",peripheral);
+    
+    //保存连接的设备
+    _connectedPeripheral = peripheral;
+    
     [SVProgressHUD showSuccessWithStatus:[NSString stringWithFormat:@"连接到名称为（%@）的设备-成功",peripheral.name]];
     
     //设置的peripheral委托CBPeripheralDelegate
@@ -316,6 +410,12 @@
     //获取Characteristic的值，读到数据会进入方法：-(void)peripheral:(CBPeripheral *)peripheral didUpdateValueForCharacteristic:(CBCharacteristic *)characteristic error:(NSError *)error
     for (CBCharacteristic *characteristic in service.characteristics){
         {
+            if (characteristic.properties & CBCharacteristicPropertyWrite) {
+                _characteristic = characteristic;
+            }
+            if ([characteristic.UUID.UUIDString isEqualToString:WriteCharacteristicUUID]) {
+                _characteristic = characteristic;
+            }
             [peripheral readValueForCharacteristic:characteristic];
         }
     }
@@ -370,6 +470,21 @@
 //    NSLog(@"service:%@ 的 characteristic uuid:%@  value:%@ characteristic uuid:%@  value:%@",descriptor.characteristic.service.UUID,descriptor.characteristic.UUID,descriptor.characteristic.value,[NSString stringWithFormat:@"%@",descriptor.UUID],descriptor.value);
 }
 
+#pragma mark -UIViewController 方法
+//插入table数据
+-(void)insertTableView:(CBPeripheral *)peripheral advertisementData:(NSDictionary *)advertisementData{
+    if(![peripherals containsObject:peripheral]) {
+        NSMutableArray *indexPaths = [[NSMutableArray alloc] init];
+        NSIndexPath *indexPath = [NSIndexPath indexPathForRow:peripherals.count inSection:0];
+        [indexPaths addObject:indexPath];
+        [peripherals addObject:peripheral];
+        [peripheralsAD addObject:advertisementData];
+        [self.tableView insertRowsAtIndexPaths:indexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
+    }
+}
+
+
+
 #pragma mark -事件
 
 //写数据
@@ -404,6 +519,7 @@
         [peripheral writeValue:value forCharacteristic:characteristic type:CBCharacteristicWriteWithResponse];
     }else{
         NSLog(@"该字段不可写！");
+        [SVProgressHUD showErrorWithStatus:@"该字段不可写！"];
     }
     
     
@@ -485,10 +601,10 @@
     [manager connectPeripheral:peripherals[indexPath.row] options:nil];
     
     [self.tableView deselectRowAtIndexPath:indexPath animated:YES];
-    PeripheralTableViewController *vc = [[PeripheralTableViewController alloc]init];
-    vc.currPeripheral = [peripherals objectAtIndex:indexPath.row];
-    vc->baby = self->baby;
-    [self.navigationController pushViewController:vc animated:YES];
+//    PeripheralTableViewController *vc = [[PeripheralTableViewController alloc]init];
+//    vc.currPeripheral = [peripherals objectAtIndex:indexPath.row];
+//    vc->baby = self->baby;
+//    [self.navigationController pushViewController:vc animated:YES];
     
 }
 
